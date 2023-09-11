@@ -52,7 +52,7 @@ lsoa_ethnicity$ethnic_density <- lsoa_ethnicity$ethnic_density*100
 
 event_locations <- data.table::fread("https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/event_info_20181231.csv") # read in data
 event_locations$Estblsh <- as.Date(x = event_locations$Estblsh, "%d/%m/%Y") # convert date
-event_locations$month_year <- substr(event_locations$Estblsh, 1, 7) # get month and year
+event_locations$month_year <- substr(event_locations$Estblsh, start =  1, stop = 7) # get month and year
 
 
 #===============================#
@@ -60,13 +60,11 @@ event_locations$month_year <- substr(event_locations$Estblsh, 1, 7) # get month 
 #===============================#
 
 lsoa_density <- fread("https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/Mid-2017%20Population%20Density.csv",
-                     stringsAsFactors = F)
-lsoa_density <- lsoa_density[grep(pattern = "E",`Code`),
+                     stringsAsFactors = F)[grep(pattern = "E",`Code`),
                             .(lsoa = `Code`,
                               pop_density = `People per Sq Km`)]
-lsoa_density$pop_density <- as.numeric(gsub(",", "", lsoa_density$pop_density))
 # convert ppl / km^2 to 1,000* ppl / km^2
-lsoa_density$pop_density <- lsoa_density$pop_density/1000
+lsoa_density$pop_density <- as.numeric(gsub(",", "", lsoa_density$pop_density))/1000
 
 #===============================#
 #          FINISHER DATA
@@ -101,19 +99,26 @@ dt_runs$day <- weekdays(x = dt_runs$date)
 dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 
 # store the overall time series data in the clean folder.
-# saveRDS(object = dt_runs[,
-#                          .(finishers = sum(finishers)),
-#                          by = c("date")],
-#         file = "data/clean/dt_finisher_ts.rds")
+ #saveRDS(object = dt_runs[,
+ #                         .(finishers = sum(finishers)),
+ #                         by = c("date")],
+ #        file = "data/clean/dt_finisher_ts.rds")
 
 # aggregate up by month and year
-dt_runs$month_year = substr(x = dt_runs$date, start = 1, stop = 7)
+dt_runs$month_year <- substr(x = dt_runs$date, start = 1, stop = 7)
 dt_runs <- dt_runs[,
-                   .(finishers = sum(finishers)),
+                   .(finishers = sum(finishers, na.rm = T)),
                    by = c("month_year","lsoa")]
+# quick check
+test <- dt_runs[,
+        .(finishers = sum(finishers, na.rm = T)),
+        by = c("month_year")]
+plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
+
 
 # create full set of all months and years since the 2011
-df_yrs_months <- expand.grid("months" =  c("01","02", "03","04", "05", "06", "07", "08", "09", "10", "11", "12"), "year" = 2011:2023) |> as.data.frame()
+df_yrs_months <- expand.grid("months" =  c("01","02", "03","04", "05", "06", "07", "08", "09", "10", "11", "12"), "year" = 2010:2023) |>
+                     as.data.frame()
 df_yrs_months$month_year <- paste0(df_yrs_months$year, "-", df_yrs_months$months)
 df_yrs_months <- df_yrs_months[df_yrs_months$month_year %nin% paste0("2023-", c("04", "05", "06", "07", "08", "09", "10", "11", "12")), ]
 
@@ -124,11 +129,17 @@ fill_dat = expand.grid(month_year = unique(df_yrs_months$month_year),
 # merge the two datasets, inserting the runs into the lsoa data
 runs_full <- merge(x = fill_dat,
                    y = dt_runs,
-                   by=c("month_year","lsoa"),
+                   by= c("month_year","lsoa"),
                    all = T)
 
 # filling missing data
 runs_full$finishers[is.na(runs_full$finishers)] <- 0
+
+# quick check:
+test <- runs_full[,
+                .(finishers = sum(finishers, na.rm = T)),
+                by = c("month_year")]
+plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
 
 #==========================#
 #     ACCESS TO EVENTS     #
@@ -183,12 +194,27 @@ for(t in months_t){
  lsoa_df_monthly <- Reduce(function(x, y) merge(x, y, by="lsoa", all=TRUE),
                           list(runs_full, lsoa_imd, lsoa_ethnicity, lsoa_density ))
 
+ # quick check:
+ test <- lsoa_df_monthly[,
+                   .(finishers = sum(finishers, na.rm = T)),
+                   by = c("month_year")]
+ plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
+
+
+
 # merge distance to nearest event
  lsoa_df_monthly <- merge(x = lsoa_df_monthly,
                           y = distance.df,
-                          by= c("lsoa","month_year"))
+                          by= c("lsoa","month_year"),
+                          all = TRUE)
 
  lsoa_df_monthly$access = as.numeric(lsoa_df_monthly$access)
+
+ # quick check:
+ test <- lsoa_df_monthly[,
+                         .(finishers = sum(finishers, na.rm = T)),
+                         by = c("month_year")]
+ plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
 
 #=========#
 # SAVE DATASETS
@@ -197,6 +223,13 @@ for(t in months_t){
 # save files to cleandata
 saveRDS(object = lsoa_df_monthly,
         file = "data/clean/lsoa_df_monthly23.rds")
+
+
+
+
+
+
+
 
 #============#
 rm(list = ls())
