@@ -17,12 +17,12 @@ dt_parkrun$year <- substr(x = dt_parkrun$month_year,
                           start = 1,
                           stop = 4) |> as.numeric()
 
-
 #====#
 # IMD quintile cuts
 #====#
 imd_quintiles_cuts <- quantile(x = dt_parkrun$imd_score,
-                               probs = seq(0, 1, 0.2))
+                               probs = seq(0, 1, 0.2),
+                               na.rm = T)
 
 dt_parkrun$imd_q5 <- cut(x = dt_parkrun$imd_score,
                         imd_quintiles_cuts,
@@ -89,25 +89,45 @@ stargazer(summary = FALSE,
 # Figure 2: parkrun participation by imd by month year
 #=====#
 
+
 fig2_df <- agg_parkrun_stat(dt_parkrun,
                            y="finishers")
-#fig2_df$imd_q5 <- factor(fig2_df$imd_q5,
-#                  levels = c("Most deprived 20%","2","3","4","Least deprived 20%","Overall"))
-#fig2_df$imd_q5[fig2_df$imd_q5 != "Overall"] <- factor(fig2_df$imd_q5[fig2_df$imd_q5 != "Overall"],
-#                                                      levels = rev(levels(fig2_df$imd_q5[fig2_df$imd_q5 != "Overall"])))
+fig2_df$imd_q5 <- factor(fig2_df$imd_q5,
+                  levels = c("Most deprived 20%","2","3","4","Least deprived 20%","Overall"))
+fig2_df$imd_q5[fig2_df$imd_q5 != "Overall"] <- factor(fig2_df$imd_q5[fig2_df$imd_q5 != "Overall"],
+                                                      levels = rev(levels(fig2_df$imd_q5[fig2_df$imd_q5 != "Overall"])))
+
+# covid months
+# define covid period
+covid_period <- format(seq(from = as.Date("2020-03-01"), to = as.Date("2021-07-01"), by="month"), "%Y-%m")
+
+fig2_df[fig2_df$month_year %in% covid_period, "finishers"] <- NA
+fig2_df$covid <- NA
+fig2_df[as.Date(paste0(fig2_df$month_year,"-01")) < as.Date("2020-03-01"), "covid"] <- "Pre-covid"
+fig2_df[as.Date(paste0(fig2_df$month_year,"-01")) > as.Date("2021-07-28"), "covid"] <- "Post-covid"
 
 #plot2 <-
-ggplot(data = fig2_df,
-       mapping = aes(x=plot_date,
-                            y=finishers,
-                            col=imd_q5)) +
+ggplot() +
   scale_y_continuous(name = "Monthly finishers per 1000 residents",
-                     expand = c(0,NA))+
-  geom_line(alpha=0.7,size=0.3) +
-  #geom_smooth(alpha=1,se=F) +
-  scale_color_manual(values=c(imd_colors,1),name="IMD quintile") +
+                     expand = c(0, NA))+
+  geom_line(data = fig2_df |> dplyr::filter(plot_date < "2023-03-01"),
+            mapping = aes(x=plot_date,
+                          y=finishers,
+                          col=imd_q5),
+            alpha=0.7,
+            size=0.3) +
+  stat_smooth(data = fig2_df |> dplyr::filter(plot_date < "2023-03-01"),
+              mapping = aes(x= plot_date,
+                            y= finishers,
+                            color= imd_q5,
+                            group = interaction(imd_q5,as.factor(covid))),
+              alpha=1,
+              se=F, method = "lm",
+              formula = y ~ x + I(x^2) + I(x^3)) +
+  scale_color_manual(values=c(imd_colors, 1), name="IMD quintile") +
   # ylab("Mean distance to the nearest parkrun event") +
-  scale_x_date(date_breaks = "1 year",date_labels = "%Y",name="") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", name="",
+               expand = c(0, NA)) +
   theme_classic()+
   theme(legend.justification = c(1, 1),
         legend.position = c(0.3, 0.8),
