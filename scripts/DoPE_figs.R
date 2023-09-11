@@ -153,7 +153,7 @@ tbl5_general <- aggregate(finishers ~ year, dt_parkrun, make_parkrun_tbl)
 tbl5_general$imd_q5 <- "Overall"
 tbl5 <- rbind(tbl5_general,tbl5_df)
 tbl5 <- reshape2::dcast(tbl5, imd_q5~year,value.var = "finishers")
-table5 <- tbl5[c(6:1),]
+table5 <- tbl5[c(5, 1, 2, 3, 4, 6),]
 
 
 # store in outputs
@@ -167,7 +167,7 @@ stargazer(summary = FALSE,
 
 # IMD RANGE
 
-IMD_RANGE = range(dt_parkrun$imd_score)
+IMD_RANGE = range(dt_parkrun$imd_score,na.rm = T)
 
 #=====#
 # Figure 3: Ratio Index of Inequality: Access
@@ -178,7 +178,7 @@ fig3$rii = apply(X = fig3,
                  MARGIN = 1,
                  FUN = function(m){
 
-                   lm.temp = lm(data = subset(dt_parkrun,month_year == m),
+                   lm.temp = lm(data = dt_parkrun[month_year == m, ],
                                 formula = access ~ imd_score)
 
                    pred.temp = predict(lm.temp,
@@ -192,7 +192,8 @@ fig3$rii = apply(X = fig3,
 
 fig3$month_year = as.Date(paste(fig3$month_year,"01",sep="-"))
 
-plot3 = ggplot(fig3,aes(x=month_year,y=rii)) +
+plot3 = ggplot(data = fig3,
+               mapping = aes(x=month_year,y=rii)) +
   geom_point() +
   geom_line() +
   scale_x_date(date_breaks = "1 year",date_labels = "%Y") +
@@ -251,14 +252,15 @@ fig4$rii = apply(X = fig4,
                  MARGIN = 1,
                  FUN = function(m){
 
-                   glm.temp = glm(data = subset(dt_parkrun,month_year == m),
+                   glm.temp = glm(data = dt_parkrun[month_year == m, ],
                                   formula = finishers ~imd_score,
                                   offset = log(total_pop),
                                   family = poisson(link="log"))
 
                    pred.temp = predict(object = glm.temp,
                                        newdata = data.frame(imd_score = IMD_RANGE,
-                                                            total_pop = mean( log(subset(dt_parkrun,month_year == m)$total_pop))),
+                                                            total_pop = mean( log(subset(dt_parkrun,month_year == m)$total_pop), na.rm = T)
+                                                            ),
                                        type="response")
 
                    tb_ratio.temp = pred.temp[1] / pred.temp[2]
@@ -275,6 +277,7 @@ plot4 <- ggplot(data = fig4,
   geom_point() +
   geom_line() +
   scale_x_date(date_breaks = "1 year",date_labels = "%Y") +
+  scale_y_continuous(name = "RII - Monthly parkrun participation", limits = c(0, 600)) +
   ylab("RII - Monthly parkrun participation") +
   theme_classic() +
   theme(axis.text   = element_text(size=14),
