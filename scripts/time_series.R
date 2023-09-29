@@ -61,7 +61,7 @@ dt_timeseries$week[dt_timeseries$week == 53] <- 52
 #
 mod0 <- glm(data = dt_timeseries,
             subset = dt_timeseries$covid_period == "pre-lockdown",
-            formula = finishers ~ poly(t, 3))
+            formula = log(finishers) ~ poly(t, 3))
 # second one fits but included the factor for covid period...
 # the "lockdown" coefficient should be close to zero
 mod0a <- glm(data = dt_timeseries,
@@ -73,7 +73,7 @@ mod1 <- glm(data = dt_timeseries,
 # As per model 0 but with seasonality
 mod2 <- glm(data = dt_timeseries,
             subset = dt_timeseries$covid_period == "pre-lockdown",
-            formula = finishers ~ poly(t, 3) * week)
+            formula = log(finishers) ~ poly(t, 3) + week)
 
 
 
@@ -96,7 +96,7 @@ predicted_runs2 <- predict(object = mod2,
 plot(x = dt_timeseries$date,
      y = dt_timeseries$finishers/1000,
      type = "l",
-     ylim = c(0, 250),
+     ylim = c(0, 400),
      xlab = "",
      ylab = "Number of finishers (thousands per week)")
 # fit to data - simple fit ignore seasonality
@@ -104,17 +104,17 @@ lines(x = dt_timeseries$date,
       y = predicted_runs0a/1000, col = "blue")
 # fit to data from before pandemic and extrapolate ignoring seasonality
 lines(x = dt_timeseries$date,
-      y = predicted_runs0/1000, col = "darkgreen")
+      y = exp(predicted_runs0)/1000, col = "darkgreen")
 # fit to data including seasonality
 lines(x = dt_timeseries$date,
       y = predicted_runs1/1000, col = "blue")
 # fit to the data pre-pandemic and extrapolate including seasonality
 lines(x = dt_timeseries$date,
-      y = predicted_runs2/1000, col = "grey")
+      y = exp(predicted_runs2)/1000, col = "grey")
 
 
 # estimate the difference between the extrapolation with seasonality & observed.
-v_parkrun_covid_effect <- (predicted_runs2 - dt_timeseries$finishers)
+v_parkrun_covid_effect <- (exp(predicted_runs2) - dt_timeseries$finishers)
 # This number of million parkruns less than in absense of pandemic
 sum(v_parkrun_covid_effect) / 1e+06
 
