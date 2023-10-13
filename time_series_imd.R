@@ -1,4 +1,6 @@
 
+library(tidyverse)
+
 rm(list = ls())
 
 source("R/get_min_dist.R")
@@ -23,7 +25,7 @@ imd_colors = imd_colors[1:length(imd_colors)]
 
 
 #aggregate by month and by imd quintilex
-fig2_df = agg_parkrun_stat(lsoa_df_monthly,y="finishers")
+df_timeseries = agg_parkrun_stat(lsoa_df_monthly,y="finishers")
 
 #visualise trend over time
 ggplot(fig2_df,aes(x=plot_date,
@@ -45,13 +47,32 @@ ggplot(fig2_df,aes(x=plot_date,
         axis.text = element_text(size=14),
         axis.title=element_text(size=16))
 
-total
-#fit simple segmented model with imd as a covariate
-mod0 <- glm(data = dt_timeseries,
-            family = poisson(link = "log"),
-            offset =
-            subset = dt_timeseries$covid_period == "pre-lockdown",
-            formula = log(finishers) ~ poly(t, 3))
+df_timeseries <- df_timeseries |>
+  filter(imd_q5 != "Overall")
+df_timeseries$total_pop <- sum(df_timeseries$finishers)
+n_months <- nrow(df_timeseries)/5
+df_timeseries$t <- rep(1:n_months,each=5 )
 
+#fit simple segmented model with imd as a covariate
+mod0 <- glm(data = df_timeseries,
+            family = poisson(link = "log"),
+            offset = log(total_pop),
+            #subset = dt_timeseries$covid_period == "pre-lockdown",
+            formula = finishers ~ t +imd_q5)
+summary(mod0)
+
+predicted_runs0 <- predict(object = mod0,
+                           newdata = data.frame(t = as.numeric(df_timeseries$t),
+                           imd_q5 = df_timeseries$imd_q5))
+
+ggplot(data = df_timeseries,
+       aes(x = t,
+           y = finishers,
+           col = imd_q5)) +
+         geom_line()
+
+
+lines(x = df_timeseries$t,
+      y = predicted_runs0, col = "darkgreen")
 
 
