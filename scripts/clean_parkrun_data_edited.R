@@ -121,10 +121,14 @@ dt_runs$day <- weekdays(x = dt_runs$date)
 dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 
 #apply exclusion criteria #1: discontinued parkruns
-dt_runs <- discontinued(dt_runs)
+#dt_runs <- discontinued(dt_runs)
 
 #extract cancelled dates (i.e. adverse weather days) for later exclusion
 cancelled_events <- cancelled(dt_runs)
+
+#save rds to visualise number of events over time
+saveRDS(object = dt_runs,
+        file = "data/clean/n_events.rds")
 
 #add imd data to finisher df
 dt_runs <- left_join(dt_runs, lsoa_imd, by = "lsoa")
@@ -164,9 +168,9 @@ dt_runs <- dt_runs |>
 
 
 #exclude dates with cancelled events
-excl <- (dt_runs$date %nin% cancelled_events$date)
+#excl <- (dt_runs$date %nin% cancelled_events$date)
 
-dt_runs <- dt_runs[excl, ]
+#dt_runs <- dt_runs[excl, ]
 
 #save for analysis
  saveRDS(object = dt_runs,
