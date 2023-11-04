@@ -305,6 +305,9 @@ plot3 <-  plot0 + geom_smooth(data = preds_ex,
               aes(x = date, y = rate, col = imd_q5),
               se = F,
               method = "glm", formula = y ~ poly(x,1))
+
+
+
               #geom_line(data = preds_ex
               #[preds_ex$covid_period == "post-lockdown"|
               #          preds_ex$covid_period == "lockdown",]
@@ -341,12 +344,18 @@ df_lost |>
   summarise(predicted = sum(predicted),
             observed = sum(observed),
             lost = sum(lost)) |>
-  mutate(total = sum(lost))
+  mutate(total = sum(lost)) |>
+  mutate(perc_decrease = signif(lost *100/predicted,3)) |>
+  print()
+  write.csv("outputs/reopening_total.csv")
 
 #predicted-observed / predicted
 df_lost |>
+#keep only first week of reopening
   distinct(imd, .keep_all = T) |>
-  mutate(prop_decrease = lost/predicted)
+  mutate(perc_decrease = signif(lost *100/predicted,3)) |>
+  print() |>
+  write.csv("outputs/reopening_decrease.csv")
 
 #plot lost participants over time
 ggplot(data = df_lost,
