@@ -7,22 +7,26 @@ rm(list = ls())
 library(data.table)
 library(raster)
 library(geosphere)
+library(sf)
+library(zoo)
+library(tidyverse)
 
 `%nin%` <- Negate(`%in%`)
 
 source("R/get_min_dist.R")
+source("R/Exclusion_criteria.R")
 
 #===============================#
 # INDEX OF MULTIPLE DEPRIVATION #
 #===============================#
 
-lsoa_imd <- data.table::fread("https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/IMD_data.csv")[
+lsoa_imd <- data.table::fread("data/raw/IMD_data_2019.csv")[
   substr(`LSOA code (2011)`, start = 1, stop = 1) == "E" # restrict to England.
   ,.(lsoa = `LSOA code (2011)`,
      imd_score = `Index of Multiple Deprivation (IMD) Score`,
      imd_decile = `Index of Multiple Deprivation (IMD) Decile (where 1 is most deprived 10% of LSOAs)`,
-     total_pop = `Total population: mid 2012 (excluding prisoners)`,
-     perc_non_working_age = 1 - (`Working age population 18-59/64: for use with Employment Deprivation Domain (excluding prisoners)`/`Total population: mid 2012 (excluding prisoners)`))
+     total_pop = `Total population: mid 2015 (excluding prisoners)`,
+     perc_non_working_age = 1 - (`Working age population 18-59/64: for use with Employment Deprivation Domain (excluding prisoners)`/`Total population: mid 2015 (excluding prisoners)`))
 ] # only retain the columns we need
 
 # weird - there exist 10 locations in which the population working age exceeds total, in this case make 0% non working age
@@ -30,6 +34,26 @@ lsoa_imd$perc_non_working_age[lsoa_imd$perc_non_working_age<0] <- 0
 
 # proportion to percent
 lsoa_imd$perc_non_working_age = lsoa_imd$perc_non_working_age*100
+
+
+
+#collapse IMD deciles into quintiles
+lsoa_imd <- lsoa_imd |>
+  mutate(imd_q5 = case_when(imd_decile == "1"| imd_decile == "2" ~ "Most deprived 20%",
+                            imd_decile == "3"| imd_decile == "4" ~ "2",
+                            imd_decile == "5"| imd_decile == "6" ~ "3",
+                            imd_decile == "7"| imd_decile == "8" ~ "4",
+                            imd_decile == "9"| imd_decile == "10" ~ "Least deprived 20%",))
+
+imd_levels <- c("Least deprived 20%","4", "3", "2", "Most deprived 20%")
+
+levels(lsoa_imd$imd_q5) <-  imd_levels
+
+lsoa_imd$imd_q5 <- factor(x = lsoa_imd$imd_q5,
+                                 levels = rev(c("Least deprived 20%","4", "3", "2", "Most deprived 20%")))
+
+
+
 
 #===============================#
 #           ETHNICITY           #
@@ -98,48 +122,62 @@ dt_runs$date <- as.Date(x = dt_runs$eventdate, format="%Y-%m-%d")
 dt_runs$day <- weekdays(x = dt_runs$date)
 dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 
-# store the overall time series data in the clean folder.
- #saveRDS(object = dt_runs[,
- #                         .(finishers = sum(finishers)),
- #                         by = c("date")],
- #        file = "data/clean/dt_finisher_ts.rds")
+#apply exclusion criteria #1: discontinued parkruns
+#dt_runs <- discontinued(dt_runs)
 
-# aggregate up by month and year
-dt_runs$month_year <- substr(x = dt_runs$date, start = 1, stop = 7)
-dt_runs <- dt_runs[,
-                   .(finishers = sum(finishers, na.rm = T)),
-                   by = c("month_year","lsoa")]
-# quick check
-test <- dt_runs[,
-        .(finishers = sum(finishers, na.rm = T)),
-        by = c("month_year")]
-plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
+#extract cancelled dates (i.e. adverse weather days) for later exclusion
+#cancelled_events <- cancelled(dt_runs)
+
+#save rds to visualise number of events over time
+saveRDS(object = dt_runs,
+        file = "data/clean/n_events.rds")
+
+#add imd data to finisher df
+dt_runs <- left_join(dt_runs, lsoa_imd, by = "lsoa")
+
+#summarise n finishers for each week stratified by imd quintile
+dt_runs <- dt_runs |>
+  group_by(date, imd_q5) |>
+  summarise(finishers = sum(finishers)) |>
+  filter(is.na(imd_q5) == F)
 
 
-# create full set of all months and years since the 2011
-df_yrs_months <- expand.grid("months" =  c("01","02", "03","04", "05", "06", "07", "08", "09", "10", "11", "12"), "year" = 2010:2023) |>
-                     as.data.frame()
-df_yrs_months$month_year <- paste0(df_yrs_months$year, "-", df_yrs_months$months)
-df_yrs_months <- df_yrs_months[df_yrs_months$month_year %nin% paste0("2023-", c("04", "05", "06", "07", "08", "09", "10", "11", "12")), ]
+##fill in missing weeks##
+dt_runs <- dt_runs[order(x = dt_runs$date),]
 
-# merge template fill_dat with runs data.
-fill_dat = expand.grid(month_year = unique(df_yrs_months$month_year),
-                       lsoa = unique(lsoa_imd$lsoa)) |> as.data.table()
+all_weeks <- data.table(date = rep(seq(from = min(dt_runs$date),
+                                       to = max(dt_runs$date), 7),
+                                       each = 5))
 
-# merge the two datasets, inserting the runs into the lsoa data
-runs_full <- merge(x = fill_dat,
-                   y = dt_runs,
-                   by= c("month_year","lsoa"),
-                   all = T)
+all_weeks$imd_q5 <- rep(imd_levels,
+                        times = nrow(all_weeks)/5)
 
-# filling missing data
-runs_full$finishers[is.na(runs_full$finishers)] <- 0
+dt_runs <- left_join(x = all_weeks,
+                     y = dt_runs,
+                     by = c("date", "imd_q5"))
 
-# quick check:
-test <- runs_full[,
-                .(finishers = sum(finishers, na.rm = T)),
-                by = c("month_year")]
-plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
+#add total popolation for each imd quintile for rate calculations etc.
+df_pop <- lsoa_imd |>
+  group_by(imd_q5) |>
+  summarise(imd_pop = sum(total_pop))
+
+dt_runs <- dt_runs |>
+  mutate(total_pop = case_when(imd_q5 == "Most deprived 20%" ~ df_pop$imd_pop[1],
+                             imd_q5 == "2" ~ df_pop$imd_pop[2],
+                             imd_q5 == "3" ~ df_pop$imd_pop[3],
+                             imd_q5 == "4" ~ df_pop$imd_pop[4],
+                             imd_q5 == "Least deprived 20%" ~ df_pop$imd_pop[5]))
+
+
+#exclude dates with cancelled events
+#excl <- (dt_runs$date %nin% cancelled_events$date)
+
+#dt_runs <- dt_runs[excl, ]
+
+#save for analysis
+ saveRDS(object = dt_runs,
+         file = "data/clean/dt_finisher_ts.rds")
+
 
 #==========================#
 #     ACCESS TO EVENTS     #
@@ -223,85 +261,3 @@ for(t in months_t){
 # save files to cleandata
 saveRDS(object = lsoa_df_monthly,
         file = "data/clean/lsoa_df_monthly23.rds")
-
-
-
-
-
-
-
-
-#============#
-rm(list = ls())
-
-# read data in...
-lsoa_df_monthly <- readRDS("data/clean/lsoa_df_monthly23.rds")
-
-imd_quintiles_cuts <- quantile(x = lsoa_df_monthly$imd_score,
-                               probs = seq(0, 1, 0.2))
-
-lsoa_df_monthly$imd_q5 <- cut(x = lsoa_df_monthly$imd_score,
-                         imd_quintiles_cuts,
-                         include.lowest = T)
-
-levels(lsoa_df_monthly$imd_q5) <-  c("Least deprived 20%","4", "3", "2", "Most deprived 20%")
-
-lsoa_df_monthly$imd_q5 <- factor(x = lsoa_df_monthly$imd_q5,
-                                 levels = rev(c("Least deprived 20%","4", "3", "2", "Most deprived 20%")))
-
-
-
-# aggregate data across year and IMD...
-df_agg <- aggregate(
-  access ~ imd_q5 + month_year,
-  data = lsoa_df_monthly,
-  FUN = mean,
-  na.rm = TRUE
-)
-
-
-
-agg_parkrun_stat = function(df, y){
-
-  fig_df = eval(parse(text = paste("aggregate(",y," ~ imd_q5 + month_year, df, mean)")))
-
-  fig_df$plot_date = as.Date(paste(fig_df$month_year,"15",sep="-"))
-
-  fig_general = eval(parse(text = paste("aggregate(",y," ~ month_year, df, mean)")))
-
-  fig_general$plot_date = as.Date(paste(fig_general$month_year,"15",sep="-"))
-
-  fig_general$imd_q5 = "Overall"
-
-  fig_general = fig_general[,names(fig_df)]
-
-  fig_df = rbind(fig_df, fig_general)
-
-  return(fig_df)
-
-}
-
-imd_colors <- c("orangered","orange","yellow3","yellowgreen","lawngreen")
-fig1_df <- agg_parkrun_stat(df = lsoa_df_monthly,
-                            y="access")
-
-#plot1 <-
-ggplot(data = fig1_df,
-       mapping = aes(x = plot_date,
-                     y = access,
-                     col = imd_q5)) +
-  geom_point(size=0.2)+
-  geom_line() +
-  scale_color_manual(values=c(imd_colors,1),name="IMD quintile") +
-  ylab("Mean distance to the nearest parkrun event (km)") +
-  scale_x_date(date_breaks = "1 year",date_labels = "%Y",name="") +
-  scale_y_continuous(trans = scales::log2_trans()) +
-  theme_classic()+
-  theme(legend.justification = c(1, 1),
-        legend.position = c(0.8, 0.8),
-        legend.background = element_rect(fill = "transparent"),
-        legend.text = element_text(size = 14),
-        legend.title = element_text(size = 16),
-        axis.text = element_text(size=14),
-        axis.title=element_text(size=16))
-
