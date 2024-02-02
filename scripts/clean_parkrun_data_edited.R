@@ -20,13 +20,13 @@ source("R/Exclusion_criteria.R")
 # INDEX OF MULTIPLE DEPRIVATION #
 #===============================#
 
-lsoa_imd <- data.table::fread("data/raw/IMD_data_2019.csv")[
+lsoa_imd <- data.table::fread("https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/IMD_data.csv")[
   substr(`LSOA code (2011)`, start = 1, stop = 1) == "E" # restrict to England.
   ,.(lsoa = `LSOA code (2011)`,
      imd_score = `Index of Multiple Deprivation (IMD) Score`,
      imd_decile = `Index of Multiple Deprivation (IMD) Decile (where 1 is most deprived 10% of LSOAs)`,
-     total_pop = `Total population: mid 2015 (excluding prisoners)`,
-     perc_non_working_age = 1 - (`Working age population 18-59/64: for use with Employment Deprivation Domain (excluding prisoners)`/`Total population: mid 2015 (excluding prisoners)`))
+     total_pop = `Total population: mid 2012 (excluding prisoners)`,
+     perc_non_working_age = 1 - (`Working age population 18-59/64: for use with Employment Deprivation Domain (excluding prisoners)`/`Total population: mid 2012 (excluding prisoners)`))
 ] # only retain the columns we need
 
 # weird - there exist 10 locations in which the population working age exceeds total, in this case make 0% non working age
@@ -35,15 +35,13 @@ lsoa_imd$perc_non_working_age[lsoa_imd$perc_non_working_age<0] <- 0
 # proportion to percent
 lsoa_imd$perc_non_working_age = lsoa_imd$perc_non_working_age*100
 
+#create imd quintiles from imd score
+imd_quintiles_cuts <- quantile(x = lsoa_imd$imd_score,
+                               probs = seq(0, 1, 0.2), na.rm= T)
 
-
-#collapse IMD deciles into quintiles
-lsoa_imd <- lsoa_imd |>
-  mutate(imd_q5 = case_when(imd_decile == "1"| imd_decile == "2" ~ "Most deprived 20%",
-                            imd_decile == "3"| imd_decile == "4" ~ "2",
-                            imd_decile == "5"| imd_decile == "6" ~ "3",
-                            imd_decile == "7"| imd_decile == "8" ~ "4",
-                            imd_decile == "9"| imd_decile == "10" ~ "Least deprived 20%",))
+lsoa_imd$imd_q5 <- cut(x = lsoa_imd$imd_score,
+                              imd_quintiles_cuts,
+                              include.lowest = T)
 
 imd_levels <- c("Least deprived 20%","4", "3", "2", "Most deprived 20%")
 
@@ -126,7 +124,7 @@ dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 #dt_runs <- discontinued(dt_runs)
 
 #extract cancelled dates (i.e. adverse weather days) for later exclusion
-#cancelled_events <- cancelled(dt_runs)
+cancelled_events <- cancelled(dt_runs)
 
 #save rds to visualise number of events over time
 saveRDS(object = dt_runs,
@@ -145,8 +143,8 @@ dt_runs <- dt_runs |>
 ##fill in missing weeks##
 dt_runs <- dt_runs[order(x = dt_runs$date),]
 
-all_weeks <- data.table(date = rep(seq(from = min(dt_runs$date),
-                                       to = max(dt_runs$date), 7),
+all_weeks <- data.table(date = rep(seq(min(dt_runs$date),
+                                       max(dt_runs$date), 7),
                                        each = 5))
 
 all_weeks$imd_q5 <- rep(imd_levels,
@@ -177,6 +175,7 @@ dt_runs <- dt_runs |>
 #save for analysis
  saveRDS(object = dt_runs,
          file = "data/clean/dt_finisher_ts.rds")
+
 
 
 #==========================#
