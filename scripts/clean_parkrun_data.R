@@ -14,7 +14,6 @@ library(tidyverse)
 `%nin%` <- Negate(`%in%`)
 
 source("R/get_min_dist.R")
-source("R/Exclusion_criteria.R")
 
 #===============================#
 # INDEX OF MULTIPLE DEPRIVATION #
@@ -115,22 +114,19 @@ names(dt_runs)[names(dt_runs) == "lsoa11"] <- "lsoa"
 # select LSOAs in England only
 dt_runs <- dt_runs[substr(dt_runs$lsoa, start = 1, stop = 1) == "E"]
 
-# convert the eventdate varaible to a date.
+# convert the eventdate variable to a date.
 dt_runs$date <- as.Date(x = dt_runs$eventdate, format="%Y-%m-%d")
 
 # restrict to saturday events only
 dt_runs$day <- weekdays(x = dt_runs$date)
 dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 
-#apply exclusion criteria #1: discontinued parkruns
-#dt_runs <- discontinued(dt_runs)
-
-#extract cancelled dates (i.e. adverse weather days) for later exclusion
-#cancelled_events <- cancelled(dt_runs)
 
 #save rds to visualise number of events over time
 saveRDS(object = dt_runs,
         file = "data/clean/n_events.rds")
+#save in workspace as runs_full for access algorithm
+runs_full <- dt_runs
 
 #add imd data to finisher df
 dt_runs <- left_join(dt_runs, lsoa_imd, by = "lsoa")
@@ -142,7 +138,7 @@ dt_runs <- dt_runs |>
   filter(is.na(imd_q5) == F)
 
 
-##fill in missing weeks##
+#fill in missing weeks#
 dt_runs <- dt_runs[order(x = dt_runs$date),]
 
 all_weeks <- data.table(date = rep(seq(from = min(dt_runs$date),
@@ -169,11 +165,6 @@ dt_runs <- dt_runs |>
                              imd_q5 == "Least deprived 20%" ~ df_pop$imd_pop[5]))
 
 
-#exclude dates with cancelled events
-#excl <- (dt_runs$date %nin% cancelled_events$date)
-
-#dt_runs <- dt_runs[excl, ]
-
 #save for analysis
  saveRDS(object = dt_runs,
          file = "data/clean/dt_finisher_ts.rds")
@@ -197,6 +188,10 @@ distM <- geosphere::distm(x= lsoa_locations,
 distM           <- distM / 1000
 dimnames(distM) <- list(rownames(lsoa_centr),
                         event_locations$course) # set row and column names
+
+#add month_year column to runs_full
+runs_full$month_year = substr(runs_full$date,1,7) # create a month & year variable
+runs_full$date = as.Date(unclass(runs_full$date),format="%Y-%m-%d") # convert to Date class
 
 ## loop to assess access in any given month  (month_years)
 # (may take a while to run)
