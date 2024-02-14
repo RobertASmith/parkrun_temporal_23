@@ -9,4 +9,4 @@ Code to assess the long-term impact of the pandemic on parkrun participation.
 4. Run the scripts from the 'scripts' folder in the following order:
   a. Clean_parkrun_data.R: cleans raw data files, outputs datasets ready for analysis.
   b. time_series.R: runs descriptive and statistical analyses.
-5. Analysis outputs can be found in 'outputs'.
+5. Figures and tables can be found in 'outputs'.
