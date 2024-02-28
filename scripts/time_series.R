@@ -76,7 +76,7 @@ df_timeseries <- left_join(x = df_timeseries,
           y = dt_fweeks,
           by = "t")
 
-#define t2 as time since intervention (i.e. t since post-lockdown)
+#define t_since_jul21 as time since intervention (i.e. t since post-lockdown)
 df_timeseries$t_since_jul21 <- difftime(df_timeseries$date,
                                         covid_period[2],
                                         units = c("weeks"))
@@ -186,20 +186,18 @@ df$t2 <- df$t2/52
   return(mod)
 }
 
-#same as above but to fit model for total population
-fit_glm_total <- function (df = df_timeseries) {
 
-#collapse IMD quintiles into total participation per week
-  df <- df |>
-    group_by(date, covid,post_covid, four_week) |>
-    summarise(finishers = sum(finishers),
-              total_pop = sum(total_pop),
-              t = mean(t),
-              t_since_jul21 = mean(t_since_jul21))
+df_timeseries_total <- df_timeseries |>
+  group_by(date, covid, post_covid, four_week) |>
+  summarise(finishers = sum(finishers),
+            total_pop = sum(total_pop),
+            t = mean(t),
+            t2 = mean(t_since_jul21))
+
+#same as above but to fit model for total population
+fit_glm_total <- function (df = df_timeseries_total) {
 
   df$t <- df$t/52
-
-  df$t2 <- df$t_since_jul21
 
   df$t2 <- df$t2/52
 
@@ -214,17 +212,11 @@ fit_glm_total <- function (df = df_timeseries) {
              +I(t2^2)
   )
 
-  #  post_covid:t +
-  #   post_covid:I(t^2)
 
-  # mod_sum <- jtools::summ(mod, exp = T) |>
-  #   print()
-
-  # t2 +
-  #   I(t2^2)
 
   return(mod)
 }
+
 
 #function to predict finisher numbers
 pred_func <- function(df = df_timeserie,imd) {
@@ -296,7 +288,7 @@ reg_table <- bind_rows(coef_table(fit_glm(df_timeseries, "Most deprived 20%"), i
           coef_table(fit_glm(df_timeseries, "3"), imd = "3"),
           coef_table(fit_glm(df_timeseries, "4"), imd = "4"),
           coef_table(fit_glm(df_timeseries, "Least deprived 20%"), imd = "Least deprived 20%"),
-          coef_table(fit_glm_total(df_timeseries), imd = "total population"))
+          coef_table(fit_glm_total(df_timeseries_total), imd = "total population"))
 
 #set all values to three significant figures
 reg_table <- reg_table |>
@@ -368,6 +360,7 @@ df$t <- df$t/52
 
   return(dt)
 }
+
 #Dataframe of counterfactual finisher predictions
 preds_ex <- bind_rows(fit_glm_ex(df_timeseries, "Most deprived 20%"),
                    fit_glm_ex(df_timeseries, "2"),
@@ -381,7 +374,7 @@ preds_ex <- bind_rows(fit_glm_ex(df_timeseries, "Most deprived 20%"),
 ####create smoothed predictions accounting for seasonality####
 #use total population parameters for all as this is sufficient for visualisation
 #fit model for total population
-mod_total <- fit_glm_total(df_timeseries)
+mod_total <- fit_glm_total(df_timeseries_total)
 
 #define pred_smooth: a dataframe for smoothed predictions
 pred_smooth <- df_timeseries
@@ -519,3 +512,85 @@ reopen_lost <- df_lost |>
 lost_table <- left_join(reopen_lost, total_lost, by = "imd_q5")
 #output table
 write.csv(lost_table, "outputs/lost_table.csv")
+
+
+
+###extrapolate models for total population to ID week###
+####when the counterfactual and observed participation meet####
+#create dataset with extrapolated dates
+df_timeseries_extrap <- data.table(date = seq(from = as.Date("2015-01-03"),
+                                                to = as.Date("2024-12-20"),
+                                              by = "week"))
+
+df_timeseries_extrap$t <- seq(1:nrow(df_timeseries_extrap))/52
+
+df_timeseries_extrap$four_week <- rep(seq(1:13),
+                                  each = 4,
+                                  times = nrow(df_timeseries_extrap)/52)
+df_timeseries_extrap$four_week <- as.factor(df_timeseries_extrap$four_week)
+
+df_timeseries_extrap$covid <- ifelse(df_timeseries_extrap$date > "2020-03-21"
+                                     & df_timeseries_extrap$date < as.Date("2021-07-17"),
+                                     1,
+                                     0)
+
+df_timeseries_extrap$post_covid <- ifelse(df_timeseries_extrap$date > "2021-07-17",
+                                     1,
+                                     0)
+
+df_timeseries_extrap$t2 <- difftime(df_timeseries_extrap$date,
+                                        covid_period[2],
+                                        units = c("weeks"))
+
+df_timeseries_extrap$t2[df_timeseries_extrap$t2 < 1] <- 0
+#convert to numeric
+df_timeseries_extrap$t2 <- as.numeric(df_timeseries_extrap$t2)/52
+
+df_timeseries_extrap$total_pop <- mean(df_timeseries_total$total_pop)
+#fit model based on pre-covid trends (i.e. the counterfactual)
+fit_glm_ex_total <-  function (df = df_timeseries_total) {
+
+  #convert t into years
+  df$t <- df$t/52
+
+
+  #fit regression model
+  mod <- df |>
+    filter(date < "2020-03-21") |>
+    glm(family = quasipoisson(link = "log"),
+        formula = finishers ~ offset(log(total_pop))
+        + t +I(t^2) + four_week)
+
+  return(mod)
+}
+
+mod_total <- fit_glm_total(df_timeseries_total)
+mod_total_ex <- fit_glm_ex_total(df_timeseries_total)
+
+pred_extrap_obs <- data.table(date = df_timeseries_extrap$date,
+                              finishers = predict(mod_total, df_timeseries_extrap, type = "response"),
+                              post_covid = df_timeseries_extrap$post_covid)
+
+pred_extrap_exp <- data.table(date = df_timeseries_extrap$date,
+                              finishers =  predict(mod_total_ex, df_timeseries_extrap, type = "response"),
+                              post_covid = df_timeseries_extrap$post_covid)
+#Visualise extrapolated participation to check
+plot(x=pred_extrap_obs$date, y = pred_extrap_obs$finishers)
+plot(x=pred_extrap_exp$date, y = pred_extrap_exp$finishers)
+
+#remove pre-reopening values
+pred_extrap_obs <- pred_extrap_obs[pred_extrap_obs$post_covid == 1]
+
+pred_extrap_exp <- pred_extrap_exp[pred_extrap_exp$post_covid == 1]
+#extrace week that observed finishers overtakes counterfactual finishers
+converge_week <- head(pred_extrap_obs[pred_extrap_obs$finishers > pred_extrap_exp$finishers],1)
+converge_week
+
+
+
+
+
+
+
+
+
