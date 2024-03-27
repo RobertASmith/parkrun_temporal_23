@@ -53,42 +53,6 @@ lsoa_imd$imd_q5 <- factor(x = lsoa_imd$imd_q5,
 
 
 
-
-#===============================#
-#           ETHNICITY           #
-#===============================#
-
-lsoa_ethnicity <- fread(input = "https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/Ethnicity_data/LSOA_Ethnicity.csv",
-                       stringsAsFactors = F)
-lsoa_ethnicity <- lsoa_ethnicity[,
-                                .(lsoa = `geography code`,
-                                  ethnic_density = 1- (`Sex: All persons; Age: All categories: Age; Ethnic Group: White: English/Welsh/Scottish/Northern Irish/British; measures: Value`/
-                                                         `Sex: All persons; Age: All categories: Age; Ethnic Group: All categories: Ethnic group; measures: Value`)
-                                )]
-lsoa_ethnicity <- lsoa_ethnicity[!(grepl("W",lsoa_ethnicity$lsoa)),]
-# proportion to percent
-lsoa_ethnicity$ethnic_density <- lsoa_ethnicity$ethnic_density*100
-
-#===============================#
-#        EVENT LOCATIONS        #
-#===============================#
-
-event_locations <- data.table::fread("https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/event_info_20181231.csv") # read in data
-event_locations$Estblsh <- as.Date(x = event_locations$Estblsh, "%d/%m/%Y") # convert date
-event_locations$month_year <- substr(event_locations$Estblsh, start =  1, stop = 7) # get month and year
-
-
-#===============================#
-#     POPULATION DENSITY        #
-#===============================#
-
-lsoa_density <- fread("https://raw.githubusercontent.com/RobertASmith/parkrun_temporal/master/rawdata/Mid-2017%20Population%20Density.csv",
-                     stringsAsFactors = F)[grep(pattern = "E",`Code`),
-                            .(lsoa = `Code`,
-                              pop_density = `People per Sq Km`)]
-# convert ppl / km^2 to 1,000* ppl / km^2
-lsoa_density$pop_density <- as.numeric(gsub(",", "", lsoa_density$pop_density))/1000
-
 #===============================#
 #          FINISHER DATA
 #===============================#
@@ -121,11 +85,7 @@ dt_runs$date <- as.Date(x = dt_runs$eventdate, format="%Y-%m-%d")
 dt_runs$day <- weekdays(x = dt_runs$date)
 dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 
-
-#save rds to visualise number of events over time
-saveRDS(object = dt_runs,
-        file = "data/clean/n_events.rds")
-#save in workspace as runs_full for access algorithm
+#save in workspace as runs_full for later use
 runs_full <- dt_runs
 
 #add imd data to finisher df
@@ -164,95 +124,32 @@ dt_runs <- dt_runs |>
                              imd_q5 == "4" ~ df_pop$imd_pop[4],
                              imd_q5 == "Least deprived 20%" ~ df_pop$imd_pop[5]))
 
-
-#save for analysis
- saveRDS(object = dt_runs,
-         file = "data/clean/dt_finisher_ts.rds")
-
-
-#==========================#
-#     ACCESS TO EVENTS     #
-#==========================#
-
-# load shape files with locations of events.
-lsoa_locations <- shapefile(x = "data/raw/lsoa_centroids/england_lsoa_2011_centroids.shp") # read in shape file
-lsoa_locations <- spTransform(x = lsoa_locations, CRSobj = crs("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")) # use correct projection
-lsoa_centr     <- coordinates(obj = lsoa_locations) # extract coordinates
-rownames(lsoa_centr) <- lsoa_locations$code
-
-# Want to calculate for each lsoa and month-year what the distance to nearest event was on 15th (middle of month)
-distM <- geosphere::distm(x= lsoa_locations,
-                         y=cbind(event_locations$lng,
-                                 event_locations$lat))
-# convert meters to km
-distM           <- distM / 1000
-dimnames(distM) <- list(rownames(lsoa_centr),
-                        event_locations$course) # set row and column names
-
-#add month_year column to runs_full
-runs_full$month_year = substr(runs_full$date,1,7) # create a month & year variable
-runs_full$date = as.Date(unclass(runs_full$date),format="%Y-%m-%d") # convert to Date class
-
-## loop to assess access in any given month  (month_years)
-# (may take a while to run)
-months_t <- as.Date(x = paste(unique(runs_full$month_year), "-15", sep="")) # middle of the month
-
-distance.df <- matrix(ncol = 3,
-                      nrow = length(months_t) * length(lsoa_locations$name),
-                     data = NA)
-colnames(distance.df) = c("lsoa","month_year","access")
-index = 0
-for(t in months_t){
-  # create a date
-  t = as.Date(t, origin = as.Date("1970-01-01"))
-  cat("\r  at:", as.character(t))
-  events_in_operation <- (event_locations$Estblsh <= t) # which parkrun events were active in month t?
-  temp.dist = get_min_dist(available_event_cols = events_in_operation,
-                           month_year = substr(x = t, start = 1, stop = 7),
-                           distance_matrix = distM)
-
-  index_rows = 1:length(lsoa_locations$name) + ( index * length(lsoa_locations$name) )
-  distance.df[index_rows,] = as.matrix(temp.dist)
-
-  index = index + 1
-}
-
-
-#=========#
-# MERGE DATA
-#=========#
-
-
-# # merge all the data-sets except distance to nearest event
- lsoa_df_monthly <- Reduce(function(x, y) merge(x, y, by="lsoa", all=TRUE),
-                          list(runs_full, lsoa_imd, lsoa_ethnicity, lsoa_density ))
-
- # quick check:
- test <- lsoa_df_monthly[,
-                   .(finishers = sum(finishers, na.rm = T)),
-                   by = c("month_year")]
- plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
+##Discard pre-2015 data: trend changed over time
+dt_runs <- dt_runs[dt_runs$date >"2015-01-01"]
 
 
 
-# merge distance to nearest event
- lsoa_df_monthly <- merge(x = lsoa_df_monthly,
-                          y = distance.df,
-                          by= c("lsoa","month_year"),
-                          all = TRUE)
 
- lsoa_df_monthly$access = as.numeric(lsoa_df_monthly$access)
 
- # quick check:
- test <- lsoa_df_monthly[,
-                         .(finishers = sum(finishers, na.rm = T)),
-                         by = c("month_year")]
- plot(as.Date(paste0(test$month_year, "-15")), test$finishers)
+ #===============================#
+ #          WEEKLY N EVENTS
+ #===============================#
+
+ #calculate weekly number events run
+ df_events <- runs_full |>
+   group_by(eventdate) |>
+   distinct(eventname, .keep_all = T) |>
+   summarise(n = n()) |>
+   select("date" = eventdate, "n_events" = n) |>
+   filter(date > "2015-01-01") |> #keep only post 2015 data
+   mutate(date = as_date(date))
+
+ agg_data <- left_join(dt_runs, df_events, by = "date")
 
 #=========#
 # SAVE DATASETS
 #=========#
 
-# save files to cleandata
-saveRDS(object = lsoa_df_monthly,
-        file = "data/clean/lsoa_df_monthly23.rds")
+ #save for analysis
+ saveRDS(object = agg_data,
+         file = "data/clean/dt_finisher_ts.rds")

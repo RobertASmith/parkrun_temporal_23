@@ -20,25 +20,9 @@ df_timeseries$imd_q5 <- factor(df_timeseries$imd_q5,
 key_colors <- append(imd_colors, "black")
 key_colors = key_colors[1:length(key_colors)]
 
-# replace NA with 0
+# replace NAs with 0 finishers
 df_timeseries$finishers[is.na(df_timeseries$finishers)] <- 0
-##Discard pre-2015 data: trend changed over time
-df_timeseries <- df_timeseries[df_timeseries$date >"2015-01-01"]
 
-
-#calculate weekly number events run
-df_events <- df_events |>
-  group_by(eventdate) |>
-  distinct(eventname, .keep_all = T) |>
-  summarise(n = n()) |>
-  select("date" = eventdate, "n_events" = n) |>
-  filter(date > "2015-01-01") |> #keep only post 2015 data
-  mutate(date = as_date(date))
-
-#add to df_timeseries -left join to ensure all weeks are kept
-df_timeseries <- left_join(df_timeseries,
-          df_events,
-          by = "date")
 #replace NAs with 0 events
 df_timeseries$n_events[is.na(df_timeseries$n_events)] <- 0
 
@@ -460,7 +444,7 @@ plot4 <- ggplot(df_timeseries[df_timeseries$covid_period == "pre-lockdown",],) +
 
 plot4
 #save plot 4
-ggsave(plot = plot4,width = 10, height=6,
+ggsave(plot = plot4,width = 10, height=12,
        filename = "outputs/figure4_preds_by_imd.png")
 
 
