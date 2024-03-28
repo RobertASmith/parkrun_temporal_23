@@ -51,8 +51,9 @@ rsconnect/
 # eventdata
 data/raw/eventdata/
 
-
-
 #outputs
 *.PNG
 *lost_table.csv
+
+#keep empty outputs folder
+!outputs/
