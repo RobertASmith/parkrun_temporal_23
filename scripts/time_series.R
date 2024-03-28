@@ -6,7 +6,6 @@ library(broom)
 
 #read in cleaned datasets
 df_timeseries <- readRDS(file = "data/clean/dt_finisher_ts.rds")
-df_events <- readRDS(file = "data/clean/n_events.rds")
 ####edit df_timeseries: add columns for modelling and visualisation and set factor levels####
 #set IMD levels and colours
 imd_levels <- c("Least deprived 20%","4", "3", "2", "Most deprived 20%")
