@@ -48,13 +48,11 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# all data
+# eventdata
 data/raw/eventdata/
-*.csv
-*.xlsx
 
 
 
 #outputs
 *.PNG
-outputs/lost_table.csv
+*lost_table.csv
