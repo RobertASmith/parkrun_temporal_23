@@ -48,10 +48,9 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# all data
+# event data
 data/raw/eventdata/
-*.csv
-*.xlsx
+
 
 
 
