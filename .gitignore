@@ -51,6 +51,7 @@ rsconnect/
 # all data
 data/raw/eventdata/
 *.csv
+*.xlsx
 
 
 
