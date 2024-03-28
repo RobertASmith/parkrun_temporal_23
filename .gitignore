@@ -49,11 +49,10 @@ po/*~
 rsconnect/
 
 # all data
+data/raw/eventdata/
 *.csv
-/data/
-data/*
-*.rda
-*.rds
+
+
 
 #plot outputs
 *.PNG
