@@ -1,19 +1,9 @@
 # R script to clean data
 rm(list = ls())
 
-# install.packages("data.table)
-# install.packages("curl)
-
 library(data.table)
-library(raster)
-library(geosphere)
-library(sf)
 library(zoo)
 library(tidyverse)
-
-`%nin%` <- Negate(`%in%`)
-
-source("R/get_min_dist.R")
 
 #===============================#
 # INDEX OF MULTIPLE DEPRIVATION #
@@ -38,7 +28,7 @@ lsoa_imd$perc_non_working_age = lsoa_imd$perc_non_working_age*100
 
 #collapse IMD deciles into quintiles
 lsoa_imd <- lsoa_imd |>
-  mutate(imd_q5 = case_when(imd_decile == "1"| imd_decile == "2" ~ "Most deprived 20%",
+  dplyr::mutate(imd_q5 = case_when(imd_decile == "1"| imd_decile == "2" ~ "Most deprived 20%",
                             imd_decile == "3"| imd_decile == "4" ~ "2",
                             imd_decile == "5"| imd_decile == "6" ~ "3",
                             imd_decile == "7"| imd_decile == "8" ~ "4",
@@ -49,7 +39,7 @@ imd_levels <- c("Least deprived 20%","4", "3", "2", "Most deprived 20%")
 levels(lsoa_imd$imd_q5) <-  imd_levels
 
 lsoa_imd$imd_q5 <- factor(x = lsoa_imd$imd_q5,
-                                 levels = rev(c("Least deprived 20%","4", "3", "2", "Most deprived 20%")))
+                          levels = rev(c("Least deprived 20%","4", "3", "2", "Most deprived 20%")))
 
 
 
@@ -79,46 +69,46 @@ names(dt_runs)[names(dt_runs) == "lsoa11"] <- "lsoa"
 dt_runs <- dt_runs[substr(dt_runs$lsoa, start = 1, stop = 1) == "E"]
 
 # convert the eventdate variable to a date.
-dt_runs$date <- as.Date(x = dt_runs$eventdate, format="%Y-%m-%d")
+dt_runs$date <- zoo::as.Date(x = dt_runs$eventdate, format="%Y-%m-%d")
 
 # restrict to saturday events only
-dt_runs$day <- weekdays(x = dt_runs$date)
+dt_runs$day <- base::weekdays(x = dt_runs$date)
 dt_runs     <- dt_runs[dt_runs$day == "Saturday"]
 
 #save in workspace as runs_full for later use
 runs_full <- dt_runs
 
 #add imd data to finisher df
-dt_runs <- left_join(dt_runs, lsoa_imd, by = "lsoa")
+dt_runs <- dplyr::left_join(dt_runs, lsoa_imd, by = "lsoa")
 
 #summarise n finishers for each week stratified by imd quintile
 dt_runs <- dt_runs |>
-  group_by(date, imd_q5) |>
-  summarise(finishers = sum(finishers)) |>
-  filter(is.na(imd_q5) == F)
+  dplyr::group_by(date, imd_q5) |>
+  dplyr::summarise(finishers = sum(finishers)) |>
+  dplyr::filter(is.na(imd_q5) == F)
 
 
 #fill in missing weeks#
 dt_runs <- dt_runs[order(x = dt_runs$date),]
 
-all_weeks <- data.table(date = rep(seq(from = min(dt_runs$date),
+all_weeks <- data.table::data.table(date = rep(seq(from = min(dt_runs$date),
                                        to = max(dt_runs$date), 7),
                                        each = 5))
 
 all_weeks$imd_q5 <- rep(imd_levels,
                         times = nrow(all_weeks)/5)
 
-dt_runs <- left_join(x = all_weeks,
+dt_runs <- dplyr::left_join(x = all_weeks,
                      y = dt_runs,
                      by = c("date", "imd_q5"))
 
 #add total popolation for each imd quintile for rate calculations etc.
 df_pop <- lsoa_imd |>
-  group_by(imd_q5) |>
-  summarise(imd_pop = sum(total_pop))
+  dplyr::group_by(imd_q5) |>
+  dplyr::summarise(imd_pop = sum(total_pop))
 
 dt_runs <- dt_runs |>
-  mutate(total_pop = case_when(imd_q5 == "Most deprived 20%" ~ df_pop$imd_pop[1],
+  dplyr::mutate(total_pop = dplyr::case_when(imd_q5 == "Most deprived 20%" ~ df_pop$imd_pop[1],
                              imd_q5 == "2" ~ df_pop$imd_pop[2],
                              imd_q5 == "3" ~ df_pop$imd_pop[3],
                              imd_q5 == "4" ~ df_pop$imd_pop[4],
@@ -137,14 +127,16 @@ dt_runs <- dt_runs[dt_runs$date >"2015-01-01"]
 
  #calculate weekly number events run
  df_events <- runs_full |>
-   group_by(eventdate) |>
-   distinct(eventname, .keep_all = T) |>
-   summarise(n = n()) |>
-   select("date" = eventdate, "n_events" = n) |>
-   filter(date > "2015-01-01") |> #keep only post 2015 data
-   mutate(date = as_date(date))
+   dplyr::group_by(eventdate) |>
+   dplyr::distinct(eventname, .keep_all = T) |>
+   dplyr::summarise(n = n()) |>
+   dplyr::select("date" = eventdate, "n_events" = n) |>
+   dplyr::filter(date > "2015-01-01") |> #keep only post 2015 data
+   dplyr::mutate(date = as_date(date))
 
- agg_data <- left_join(dt_runs, df_events, by = "date")
+ agg_data <- dplyr::left_join(x = dt_runs,
+                              y = df_events,
+                              by = "date")
 
 #=========#
 # SAVE DATASETS
