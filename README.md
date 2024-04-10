@@ -28,9 +28,9 @@ Oscar Rousham, Dr. Robert A. Smith \*, Dr. Helen Quirk and Prof. Elizabeth Goyde
 3. Open parkrun_temporal_23.Rproj in R studio
 
 **Replication**
-There are two R scripts, `clean_parkrun_data.R` and `time_series.R`. 
+There are two main R scripts, `clean_parkrun_data.R` and `time_series.R`. 
    * Clean_parkrun_data.R cleans raw data files, outputs datasets ready for analysis. This has been run already and aggregated data has been uploaded to the repository. This is just for reference as unaggregated data is not publicly available.
-   * time_series.R: runs descriptive and statistical analyses. This script can be run to replicate the analysis. The script requires two datasets which are included in their correct locations in the repository:
+   * time_series.R: runs descriptive and statistical analyses. This script can be run to replicate the analysis. The script requires two datasets which are included in their correct locations in the repository and glm functions which are in the `R` folder:
        - [IMD_data_2019.csv](/data/raw): CSV from Indices of Deprivation report 2019, [(UK government,2019)](https://www.gov.uk/government/statistics/english-indices-of-deprivation-2019) available in line with an [open government licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/);
        - [dt_finisher_ts.rds](/data/clean): aggregated data detailing number of finishers each week by IMD and number of events held each week. Shared with permission from parkrun UK.
 
@@ -57,7 +57,11 @@ We provide our cleaned data by IMD quintile - for access to the raw data utilise
 
 ## Dependencies
 
+A list of packages used can be found at [/deps.yaml](/deps.yaml). The code was developed in:
 
+> R version 4.3.1 (2023-06-16 ucrt)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 11 x64 (build 22631)
 
 
 
