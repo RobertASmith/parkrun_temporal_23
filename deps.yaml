@@ -1,0 +1,25 @@
+- Package: broom
+  Repository: CRAN
+  Version: 1.0.5
+- Package: data.table
+  Repository: CRAN
+  Version: 1.14.8
+- Package: zoo
+  Repository: CRAN
+  Version: 1.8-12
+- Package: tidyverse
+  Repository: CRAN
+  Version: 2.0.0
+- Package: dplyr
+  Repository: CRAN
+  Version: 1.1.3
+- ~
+- Package: stringr
+  Repository: CRAN
+  Version: 1.5.0
+- Package: tidyr
+  Repository: CRAN
+  Version: 1.3.0
+- Package: generics
+  Repository: CRAN
+  Version: 0.1.3
