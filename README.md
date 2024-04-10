@@ -36,6 +36,8 @@ There are two R scripts, `clean_parkrun_data.R` and `time_series.R`.
 
 All of the outputs from the analysis can be found in the (outputs)[/outputs/] folder.
 
+See a list of packages with versions below.
+
 
 ### Acknowledgements, Funding & Competing interests
 
@@ -51,7 +53,11 @@ Acknowledgements:
 We would like to thank Mike Graney (Head of Analysis at parkrun) and Chrissie Wellington (Global Head of Health and Wellbeing at parkrun) for providing area level parkrun participation data.
 
 Data:
-- We provide our cleaned data by IMD quintile - for access to the raw data utilised in this code please contact Mike Graney at parkrunUK.
+We provide our cleaned data by IMD quintile - for access to the raw data utilised in this code please contact Mike Graney at parkrunUK.
+
+## Dependencies
+
+
 
 
 
