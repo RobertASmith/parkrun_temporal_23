@@ -1,9 +1,12 @@
-# The Long-Term Effect of the Coronavirus Pandemic on parkrun Participation: An Interrupted Time Series Analysis. Under review. 2024
+# The Long-Term Effect of the Coronavirus Pandemic on parkrun Participation: An Interrupted Time Series Analysis. BMC Public Health. 2024
 
 ## Authors
 Oscar Rousham, Dr. Robert A. Smith \*, Dr. Helen Quirk and Prof. Elizabeth Goyder
 
 \*corresponding author: robert.smith@sheffield.ac.uk
+
+**Cite as**
+>Rousham, O., Quirk, H., Goyder, E. et al. The long-term effect of the coronavirus pandemic on parkrun participation: an interrupted time series analysis. BMC Public Health 24, 2931 (2024). https://doi.org/10.1186/s12889-024-20420-0
 
 ## Abstract
 
